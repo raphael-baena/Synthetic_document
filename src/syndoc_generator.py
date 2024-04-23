@@ -9,6 +9,8 @@ from utils.logger import print_info
 from utils.path import DATASETS_PATH, SYNTHETIC_DOCUMENT_DATASET_PATH
 
 RANDOM_DOC_HEIGHT_FREQ = 0.5
+import random
+import time
 
 
 class SyntheticDocumentDatasetGenerator:
@@ -40,13 +42,21 @@ class SyntheticDocumentDatasetGenerator:
             for k in range(shift, shift + nb):
                 if self.verbose:
                     print_info('  Generating random document with seed {}...'.format(k))
-                with use_seed(k):
-                    random_height = choice([True, False], p=[RANDOM_DOC_HEIGHT_FREQ, 1 - RANDOM_DOC_HEIGHT_FREQ])
-                    if random_height:
-                        kwargs['height'] = None
-                kwargs['seed'] = k
-                d = SyntheticDocument(**kwargs)
-                d.save('{}'.format(k).zfill(max_len_id), self.output_dir / name)
+                
+                while True:
+                    try:
+                        seed = 0#int(time.time())
+                        with use_seed(k):
+                            random_height = choice([True, False], p=[RANDOM_DOC_HEIGHT_FREQ, 1 - RANDOM_DOC_HEIGHT_FREQ])
+                            if random_height:
+                                kwargs['height'] = None
+                        kwargs['seed'] = seed
+
+                        d = SyntheticDocument(**kwargs)
+                        d.save('{}'.format(k).zfill(max_len_id), self.output_dir / name)
+                        break
+                    except Exception as e:
+                        pass
             shift += nb
 
 
