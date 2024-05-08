@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from numpy.random import uniform, choice
 from random import randint, choice as rand_choice
-
+import random
 import arabic_reshaper
 from bidi.algorithm import get_display
 # from googletrans import Translator
@@ -26,6 +26,9 @@ from utils.path import SYNTHETIC_RESRC_PATH
 from synthetic.resource import (ResourceDatabase, BACKGROUND_RESRC_NAME, CONTEXT_BACKGROUND_RESRC_NAME,
                                 DRAWING_RESRC_NAME, DRAWING_BACKGROUND_RESRC_NAME, GLYPH_FONT_RESRC_NAME,
                                 FONT_RESRC_NAME, IMAGE_RESRC_NAME, NOISE_PATTERN_RESRC_NAME, TEXT_RESRC_NAME)
+import pickle
+
+dictionnary_category_ability_paths = pickle.load(open("/home/rbaena/projects/OCR/DINO/datasets/new_dictionnary_category_ability_paths.pkl",'rb'))
 
 
 DATABASE = ResourceDatabase()
@@ -69,7 +72,7 @@ TABLE_LAYOUT_RANGE = {
 }
 
 TEXT_BASELINE_HEIGHT = 5
-TEXT_BBOX_FREQ = 0.3
+TEXT_BBOX_FREQ = 0.1
 TEXT_BBOX_BORDER_WIDTH_RANGE = (1, 6)
 TEXT_BBOX_PADDING_RANGE = (0, 20)
 TEXT_COLORED_FREQ = 0.5
@@ -80,7 +83,7 @@ TEXT_FONT_TYPE_RATIO = {
     'normal': 0.5,
 }
 TEXT_JUSTIFIED_PARAGRAPH_FREQ = 0.7
-TEXT_ROTATION_ANGLE_RANGE = (-60, 60)
+TEXT_ROTATION_ANGLE_RANGE = (-40, 40)
 TEXT_TIGHT_PARAGRAPH_FREQ = 0.5
 TEXT_TITLE_UPPERCASE_RATIO = 0.5
 TEXT_TITLE_UNILINE_RATIO = 0.25
@@ -146,10 +149,18 @@ class AbstractElement:
     pos_x = NotImplemented
     pos_y = NotImplemented
 
-    def __init__(self, width, height, seed=None, **kwargs):
+    def __init__(self, width, height, seed=None, font_path = None, font_type  = None, parameters_element = None,**kwargs):
+        
         self.width, self.height = width, height
+        self.font_path = font_path
+        self.font_type = font_type
         self.parameters = kwargs
+
+        self.parameters_element = parameters_element
         self.generate_content(seed=seed)
+
+
+
 
     @property
     def size(self):
@@ -400,11 +411,12 @@ class GlyphElement(AbstractElement):
         image_draw = ImageDraw.Draw(canvas)
         colors_alpha = self.colors + (self.opacity,)
         image_draw.text(self.position, self.letter, font=self.font, fill=colors_alpha)
+        
         if self.as_negative:
             canvas = canvas.filter(ImageFilter.GaussianBlur(self.blur_radius))
         return canvas
 
-    def to_label_as_array(self):
+    def to_label_as_array(self): ### TO CHANGE IN ORDER TO RETURN BOUDING BOXES
         if self.as_negative:
             return np.full(self.size, BACKGROUND_LABEL, dtype=np.uint8).transpose()
         else:
@@ -414,7 +426,6 @@ class GlyphElement(AbstractElement):
             canvas = Image.new('L', size, color=0)
             image_draw = ImageDraw.Draw(canvas)
             image_draw.text(position, self.letter, font=self.font, fill=255)
-
             nb_iter = self.font_size // 2
             label = (np.asarray(canvas, dtype=np.uint8) > 0).astype(np.uint8)
             label = cv2.morphologyEx(label, cv2.MORPH_CLOSE, kernel=np.ones((3, 3), dtype=np.uint8), iterations=nb_iter)
@@ -468,6 +479,15 @@ class AbstractTextElement(AbstractElement):
     border_label = TEXT_BORDER_LABEL
     border_color = TEXT_BORDER_COLOR
     name = 'text'
+    def __init__(self, width, height, seed=None, font_path=None, font_type=None, parameters_element=None, **kwargs):
+        self.width, self.height = width, height
+        self.font_path = font_path
+        self.font_type = font_type
+        self.parameters = kwargs
+        self.parameters_element = parameters_element
+        self.set_parameters(parameters_element)
+        self.generate_content(seed=seed)
+    
 
     @abstractproperty
     def text_type(self):
@@ -489,46 +509,144 @@ class AbstractTextElement(AbstractElement):
     def line_spacing_range(self):
         pass
 
+
+
     @staticmethod
     def get_random_font():
+        ability = 'fonts_letters_with_accent_and_numbers'
         font_type = choice(list(TEXT_FONT_TYPE_RATIO.keys()), p=list(TEXT_FONT_TYPE_RATIO.values()))
-        return choice(DATABASE[FONT_RESRC_NAME][font_type])
+        ### TO CHANGE HERE
+        if font_type == 'handwritten':
+            category = 'HANDWRITING'
+        else:
+            category = random.choice(['SANS_SERIF', 'MONOSPACE', 'SERIF', 'DISPLAY'])
+        return np.random.choice(dictionnary_category_ability_paths[category][ability]) , font_type
+        #return choice(DATABASE[FONT_RESRC_NAME][font_type])
+    @use_seed()
+    def set_parameters(self,kwargs ):
+
+        if kwargs is None:
+            kwargs = {}
+        self.justified = kwargs.get('justified', None) 
+        self.font_size = kwargs.get('font_size', None)
+        self.spacing = kwargs.get('spacing', None)
+        self.blur_radius  = kwargs.get('blur_radius', None)
+        self.opacity = kwargs.get('opacity', None)
+        self.rotated_text = kwargs.get('rotated_text', None)
+        self.rotation_angle = kwargs.get('rotation_angle', None)
+        self.rot_padding = kwargs.get('rot_padding', None)
+        self.colors_alpha = kwargs.get('colors_alpha', None)
+        self.underlined = kwargs.get('underlined', None)
+        self.underlined_params = kwargs.get('underlined_params', None)
+        self.underline_padding = kwargs.get('underline_padding', None)
+        self.underline_params = kwargs.get('underline_params', None)
+        self.with_bbox = kwargs.get('with_bbox', None)
+        self.bbox_params = kwargs.get('bbox_params', None)
+        self.padding = kwargs.get('padding', None)
+        
+        if self.font_path is None:
+            self.font_path,self.font_type = self.get_random_font()
+
+       
+
+
+        min_fs, max_fs = self.font_size_range
+        min_spacing, max_spacing = self.line_spacing_range
+        self.as_negative = self.parameters.get('as_negative', False)
+        if self.font_size is None:
+            #min_fs, max_fs = self.font_size_range
+            if self.text_type == 'paragraph':
+                self.tight = choice([True, False], p=[TEXT_TIGHT_PARAGRAPH_FREQ, 1 - TEXT_TIGHT_PARAGRAPH_FREQ])
+                if self.tight:
+                    max_fs, max_spacing = max(min_fs, 30), max(min_spacing, 4)
+                else:
+                    min_fs, min_spacing = min(30, max_fs), min(2, max_fs)
+                self.justified = self.tight and choice([True, False], p=[TEXT_JUSTIFIED_PARAGRAPH_FREQ,
+                                                                    1 - TEXT_JUSTIFIED_PARAGRAPH_FREQ])
+            rescaled_height = (self.height * 2) // 3
+            actual_max_fs = min(rescaled_height, max_fs)
+
+            tmp_font = ImageFont.truetype(self.font_path, size=actual_max_fs)
+            while tmp_font.getsize('bucolic')[0] > self.width and actual_max_fs > self.font_size_range[0]:
+                actual_max_fs -= 1
+                tmp_font = ImageFont.truetype(self.font_path, size=actual_max_fs)
+            if min_fs < actual_max_fs:
+                self.font_size = randint(min_fs, actual_max_fs)
+            else:
+                self.font_size = actual_max_fs
+        self.font = ImageFont.truetype(self.font_path, size=self.font_size)
+        if self.spacing is None:
+            self.spacing = randint(min_spacing, max_spacing)
+        if self.blur_radius is None:
+            self.blur_radius = uniform(*NEG_ELEMENT_BLUR_RADIUS_RANGE) if self.as_negative else None
+        if self.opacity is None:
+            self.opacity = randint(*NEG_ELEMENT_OPACITY_RANGE[self.name] if self.as_negative
+                                else POS_ELEMENT_OPACITY_RANGE[self.name])
+        if self.colors_alpha is None:
+            dark_mode = self.parameters.get('dark_mode', True)
+            color_range = (0, 75) if dark_mode else (175, 255)
+            colored = choice([True, False], p=[TEXT_COLORED_FREQ, 1 - TEXT_COLORED_FREQ])
+            colors = tuple([randint(*color_range)] * 3) if not colored else tuple([randint(*color_range) for _ in range(3)])
+
+            self.colors_alpha = colors + (self.opacity,)
+
+        if  self.underlined is None:
+            self.underlined = (choice([True, False], p=[TEXT_UNDERLINED_FREQ, 1 - TEXT_UNDERLINED_FREQ]) and
+                           self.font_type in ['normal', 'handwritten'] and not self.text_type == 'word')
+            if self.underlined:
+                self.underline_params = {
+                    'width': randint(*LINE_WIDTH_RANGE),
+                    'fill': tuple([randint(*color_range)] * 3) + (self.opacity,),
+                }
+                strikethrough = choice([True, False])
+                line_height = self.font.font.getsize('a')[0][1]
+                self.underline_padding = randint(*TEXT_UNDERLINED_PADDING_RANGE) if not strikethrough else -line_height // 2
+            else:
+                self.underlined_params, self.underline_padding = None, 0
+
+
+        if self.with_bbox is None:
+            self.with_bbox = self.text_type == 'paragraph' and choice([True, False], p=[TEXT_BBOX_FREQ, 1 - TEXT_BBOX_FREQ])
+            if self.with_bbox:
+                filled = choice([True, False])
+                alpha = randint(0, min(self.opacity, 100))
+                self.bbox_params = {
+                    'width': randint(*TEXT_BBOX_BORDER_WIDTH_RANGE),
+                    'outline': self.colors_alpha,
+                    'fill': tuple([randint(150, 255) for _ in range(3)]) + (alpha,) if filled else None
+                }
+                self.padding = randint(*TEXT_BBOX_PADDING_RANGE) + self.bbox_params['width'] + 1
+            else:
+                self.bbox_params, self.padding = None, 0
+    
+    def get_parameters(self):
+        return {'justified':self.justified,
+                'font_size':self.font_size,
+                'spacing':self.spacing,
+                'blur_radius':self.blur_radius,
+                'opacity':self.opacity,
+                'rotated_text':self.rotated_text,
+                'rotation_angle':self.rotation_angle, 
+                'rot_padding':self.rot_padding, 
+                'colors_alpha':self.colors_alpha, 
+                'underlined':self.underlined, 
+                'underlined_params':self.underlined_params, 
+                'underline_padding':self.underline_padding,
+                'underline_params':self.underline_params,
+                'with_bbox':self.with_bbox, 
+                'bbox_params':self.bbox_params, 
+                'padding':self.padding}
+
 
     @use_seed()
     def generate_content(self):
-        min_fs, max_fs = self.font_size_range
-        min_spacing, max_spacing = self.line_spacing_range
-        if self.text_type == 'paragraph':
-            tight = choice([True, False], p=[TEXT_TIGHT_PARAGRAPH_FREQ, 1 - TEXT_TIGHT_PARAGRAPH_FREQ])
-            if tight:
-                max_fs, max_spacing = max(min_fs, 30), max(min_spacing, 4)
-            else:
-                min_fs, min_spacing = min(30, max_fs), min(2, max_fs)
-            self.justified = tight and choice([True, False], p=[TEXT_JUSTIFIED_PARAGRAPH_FREQ,
-                                                                1 - TEXT_JUSTIFIED_PARAGRAPH_FREQ])
-        else:
-            self.justified = False
-        self.font_path = self.parameters.get('font_path') or self.get_random_font()
-        self.font_type = Path(self.font_path).relative_to(SYNTHETIC_RESRC_PATH / FONT_RESRC_NAME).parts[0]
-
-        # To avoid oversized letters
-        rescaled_height = (self.height * 2) // 3
-        actual_max_fs = min(rescaled_height, max_fs)
-        tmp_font = ImageFont.truetype(self.font_path, size=actual_max_fs)
-        while tmp_font.getsize('bucolic')[0] > self.width and actual_max_fs > self.font_size_range[0]:
-            actual_max_fs -= 1
-            tmp_font = ImageFont.truetype(self.font_path, size=actual_max_fs)
-        if min_fs < actual_max_fs:
-            self.font_size = randint(min_fs, actual_max_fs)
-        else:
-            self.font_size = actual_max_fs
-        self.spacing = randint(min_spacing, max_spacing)
 
         if 'text' in self.parameters:
             text = self.parameters['text']
         else:
             n_char = 0
             while (n_char <= self.n_min_characters):
+                
                 self.text_path = choice(DATABASE[TEXT_RESRC_NAME])
                 with open(self.text_path) as f:
                     text = f.read().rstrip('\n')
@@ -538,11 +656,13 @@ class AbstractTextElement(AbstractElement):
         if self.baseline_as_label:
             self.label, self.color = BASELINE_LABEL, BASELINE_COLOR
 
-        self.font = ImageFont.truetype(self.font_path, size=self.font_size)
+        #self.font = ImageFont.truetype(self.font_path, size=self.font_size)
         self.as_negative = self.parameters.get('as_negative', False)
-        self.blur_radius = uniform(*NEG_ELEMENT_BLUR_RADIUS_RANGE) if self.as_negative else None
-        self.opacity = randint(*NEG_ELEMENT_OPACITY_RANGE[self.name] if self.as_negative
-                               else POS_ELEMENT_OPACITY_RANGE[self.name])
+        
+        # self.blur_radius = uniform(*NEG_ELEMENT_BLUR_RADIUS_RANGE) if self.as_negative else None
+        # self.opacity = randint(*NEG_ELEMENT_OPACITY_RANGE[self.name] if self.as_negative
+        #                        else POS_ELEMENT_OPACITY_RANGE[self.name])
+        
         self.transpose = self.parameters.get('transpose', False)
 
         if self.text_type == 'title':
@@ -558,37 +678,6 @@ class AbstractTextElement(AbstractElement):
             self.uppercase = self.font_type == 'chinese'
             self.uniline = False
 
-        dark_mode = self.parameters.get('dark_mode', True)
-        color_range = (0, 75) if dark_mode else (175, 255)
-        colored = choice([True, False], p=[TEXT_COLORED_FREQ, 1 - TEXT_COLORED_FREQ])
-        colors = tuple([randint(*color_range)] * 3) if not colored else tuple([randint(*color_range) for _ in range(3)])
-        self.colors_alpha = colors + (self.opacity,)
-
-        self.underlined = (choice([True, False], p=[TEXT_UNDERLINED_FREQ, 1 - TEXT_UNDERLINED_FREQ]) and
-                           self.font_type in ['normal', 'handwritten'] and not self.text_type == 'word')
-        if self.underlined:
-            self.underline_params = {
-                'width': randint(*LINE_WIDTH_RANGE),
-                'fill': tuple([randint(*color_range)] * 3) + (self.opacity,),
-            }
-            strikethrough = choice([True, False])
-            line_height = self.font.font.getsize('a')[0][1]
-            self.underline_padding = randint(*TEXT_UNDERLINED_PADDING_RANGE) if not strikethrough else -line_height // 2
-        else:
-            self.underlined_params, self.underline_padding = None, 0
-        self.with_bbox = self.text_type == 'paragraph' and choice([True, False], p=[TEXT_BBOX_FREQ, 1 - TEXT_BBOX_FREQ])
-        if self.with_bbox:
-            filled = choice([True, False])
-            alpha = randint(0, min(self.opacity, 100))
-            self.bbox_params = {
-                'width': randint(*TEXT_BBOX_BORDER_WIDTH_RANGE),
-                'outline': self.colors_alpha,
-                'fill': tuple([randint(150, 255) for _ in range(3)]) + (alpha,) if filled else None
-            }
-            self.padding = randint(*TEXT_BBOX_PADDING_RANGE) + self.bbox_params['width'] + 1
-        else:
-            self.bbox_params, self.padding = None, 0
-
         self.with_border_label = self.parameters.get('with_border_label', False)
         if self.with_border_label:
             label_height = self.font.font.getsize('A')[0][1]
@@ -598,7 +687,7 @@ class AbstractTextElement(AbstractElement):
         self.text, content_width, content_height = self.format_text(text)
         self.is_empty_text = len(self.text) == 0
 
-        self.rotated_text = self.text_type == 'word' and len(self.text) > 2
+        self.rotated_text = True#self.text_type == 'word' and len(self.text) > 2
         if self.rotated_text:
             hypo = np.sqrt((content_width**2 + content_height**2) / 4)
             shift = np.arctan(content_height / content_width)
@@ -606,14 +695,17 @@ class AbstractTextElement(AbstractElement):
             actual_max_rot = (actual_max_rot - shift) * 180 / np.pi
             min_rot, max_rot = TEXT_ROTATION_ANGLE_RANGE
             min_rot, max_rot = max(min_rot, -actual_max_rot), min(max_rot, actual_max_rot)
-            self.rotation_angle = uniform(min_rot, max_rot)
+            if self.rotation_angle is None:
+                self.rotation_angle = uniform(min_rot, max_rot)
             shift = -shift if self.rotation_angle < 0 else shift
             new_content_height = 2 * abs(round(float(np.sin((self.rotation_angle * np.pi / 180) + shift) * hypo)))
-            self.rot_padding = (new_content_height - content_height) // 2
+            if self.rot_padding is None:
+                self.rot_padding = (new_content_height - content_height) // 2
             self.content_width, self.content_height = content_width, new_content_height
             self.pos_x = randint(0, max(0, self.width - self.content_width))
             self.pos_y = randint(self.rot_padding, max(self.rot_padding, self.height - self.content_height))
         else:
+
             self.content_width, self.content_height = content_width, content_height
             self.pos_x = randint(0, max(0, self.width - self.content_width))
             self.pos_y = randint(0, max(0, self.height - self.content_height))
@@ -652,6 +744,7 @@ class AbstractTextElement(AbstractElement):
 
         else:
             max_lines = 1 if self.uniline else self.n_max_lines
+
             result_text, lines = '', ''
             text_height, cur_idx, n_lines = 0, 0, -1
             while text_height <= height:
@@ -666,13 +759,16 @@ class AbstractTextElement(AbstractElement):
                 if line_width > width:
                     index = int(width / avg_char_width) + 10  # take larger slice in case of small characters
                     cut = max(line[:index].rfind(' '), line.find(' '))  # in case no space found in slice (small width)
+                    
                     line = line[:cut].strip()
                     line_width = self.font.getsize(line)[0]
                 while line_width > width:
+                    
                     if ' ' in line:  # remove word by word
                         line = line[:line.rfind(' ')].strip()
                     else:  # remove character by character
                         line = line[:-1]
+                    
                     line_width = self.font.getsize(line)[0]
 
                 cur_idx += len(line) + 1
@@ -691,7 +787,9 @@ class AbstractTextElement(AbstractElement):
                                 line = line[:space_idx] + ' ' + line[space_idx:]
                                 pos = space_idx + q + 1
                                 r -= 1
+                
                 lines = '{}\n{}'.format(lines, line) if lines else line
+
                 text_height = self.font.getsize_multiline(lines, spacing=self.spacing)[1]
 
         if '\n' in result_text and self.justified:  # we dont want to justify the last line
@@ -700,6 +798,7 @@ class AbstractTextElement(AbstractElement):
             result_text = '{}\n{}'.format(result_text, last_line)
 
         content_width, content_height = self.font.getsize_multiline(result_text, spacing=self.spacing)
+
         content_width += 2 * self.padding
         content_height += 2 * self.padding
 
@@ -717,6 +816,7 @@ class AbstractTextElement(AbstractElement):
             image_draw.rectangle([(x+p, y+p), (x+self.content_width-p, y+self.content_height-p)], **self.bbox_params)
 
         if self.underlined:
+
             x, y = self.pos_x + self.padding, self.pos_y + self.padding + self.underline_padding
             line_height = self.font.getsize('A')[1]
             ascent, descent = self.font.getmetrics()
@@ -728,7 +828,7 @@ class AbstractTextElement(AbstractElement):
 
         image_draw.text((self.pos_x + self.padding, self.pos_y + self.padding), self.text, self.colors_alpha,
                         font=self.font, spacing=self.spacing)
-
+        
         if self.rotated_text:
             x, y = self.pos_x, self.pos_y
             img = canvas.crop((x, y - self.rot_padding, x + self.content_width, y + self.content_height -
@@ -737,44 +837,72 @@ class AbstractTextElement(AbstractElement):
             canvas.paste(img, (self.pos_x, self.pos_y - self.rot_padding))
         if self.as_negative:
             canvas = canvas.filter(ImageFilter.GaussianBlur(self.blur_radius))
-        if self.transpose:
-            canvas = canvas.transpose(Image.ROTATE_90)
+        # if self.transpose:
+        #     canvas = canvas.transpose(Image.ROTATE_90)
 
         return canvas
 
     def to_label_as_array(self):
         label = np.full(self.size, self.background_label, dtype=np.uint8)
+        bboxes = []
         if not self.as_negative and len(self.text) > 0:
             x, y = self.pos_x + self.padding, self.pos_y + self.padding
-            line_height = self.font.getsize('A')[1]
-            if self.baseline_as_label:
-                label_height = TEXT_BASELINE_HEIGHT // 2
-            else:
-                if self.text.isdigit():
-                    char = '1'
-                elif self.uppercase:
-                    char = 'A'
-                else:
-                    char = 'a'
-                label_height = self.font.font.getsize(char)[0][1]
-            ascent, descent = self.font.getmetrics()
-            offset_y = max(0, ascent - label_height)
-            if self.baseline_as_label:
-                ascent += label_height + 1
+            #line_height = self.font.getsize('A')[1]
+            # if self.baseline_as_label:
+            #     label_height = TEXT_BASELINE_HEIGHT // 2
+            # else:
+            #     if self.text.isdigit():
+            #         char = '1'
+            #     elif self.uppercase:
+            #         char = 'A'
+            #     else:
+            #         char = 'a'
+            #     label_height = self.font.font.getsize(char)[0][1]
+
             lines = self.text.split('\n')
             if self.with_border_label:
-                border = label_height // 2 if not self.baseline_as_label else TEXT_BASELINE_HEIGHT // 2 + 1
+               
+                line_height = line_height = self.font.getsize('A')[1]
                 for line in lines:
                     if len(line) == 0:
                         continue
+
+                    label_width, label_height = self.font.getsize(line)
+
+                   
+                    ascent, descent = self.font.getmetrics()
+
+                    #offset_y = max(0, ascent - label_height)
+                    # if self.baseline_as_label:
+                    #     ascent += label_height + 1
+                    border_x = label_width#if not self.baseline_as_label else TEXT_BASELINE_HEIGHT // 2 + 1
+                    border_y = label_height if not self.baseline_as_label else TEXT_BASELINE_HEIGHT // 2 + 1
+
                     line_width = self.font.getsize(line)[0]
-                    x_min, x_max = max(0, x - border), min(x + line_width + border, label.shape[0])
-                    y_min, y_max = max(0, y + offset_y - border), min(y + ascent + border, label.shape[1])
+                    # x_min, x_max = max(0, x - border), min(x + line_width + border, label.shape[0])
+                    # y_min, y_max = max(0, y + offset_y - border_y), min(y + ascent + border_y, label.shape[1])
+                    x_min, x_max =  max(0, x - border_x), min(x + line_width + border_x, label.shape[0])
+                    y_min, y_max = max(0, y ), min(y + border_y, label.shape[1])
+
+                    #y_min = y
                     label[x_min:x_max, y_min:y_max] = self.border_label
+                    
+                    bb =  self.font.getbbox(line)
+                    x_min, y_min, x_max, y_max = x + bb[0], y + bb[1], x + bb[2], y + bb[3]
                     y += line_height + self.spacing
+                    bb = [int(x_min), int(y_min),int(x_max), int(y_min),int(x_max), int(y_max),int(x_min), int(y_max)]
+                    bboxes.append(bb)
 
             x, y = self.pos_x + self.padding, self.pos_y + self.padding
             for line in lines:
+                label_height = self.font.getsize(line)[1]
+                line_height = label_height
+                ascent, descent = self.font.getmetrics()
+
+                offset_y = max(0, ascent - label_height)
+                if self.baseline_as_label:
+                    ascent += label_height + 1
+                border = label_height // 2 if not self.baseline_as_label else TEXT_BASELINE_HEIGHT // 2 + 1
                 line_width = self.font.getsize(line)[0]
                 y_min, y_max = y + offset_y, min(y + ascent, label.shape[1])
                 label[x:x+line_width, y_min:y_max] = self.label
@@ -782,13 +910,29 @@ class AbstractTextElement(AbstractElement):
 
         label = label.transpose()
         if self.rotated_text:
+
             center = (self.pos_x + self.content_width / 2, self.pos_y + self.content_height / 2 - self.rot_padding)
             R = cv2.getRotationMatrix2D(center, self.rotation_angle, 1)
             label = cv2.warpAffine(label, R, self.size, flags=cv2.INTER_NEAREST, borderValue=self.background_label)
+            new_boxes = []
+            for box in bboxes:
+                x_min, y_min, x_max, y_max = box[0], box[1], box[4], box[5]
+                
+                points = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
+                transformed_points = cv2.transform(np.array([points]), R)[0]
+                new_boxe = [int(transformed_points[0][0]), int(transformed_points[0][1]), 
+                            int(transformed_points[1][0]), int(transformed_points[1][1]), 
+                            int(transformed_points[2][0]), int(transformed_points[2][1]),
+                            int(transformed_points[3][0]), int(transformed_points[3][1])]
+                new_boxes.append(new_boxe)
+            bboxes = new_boxes
+
+
+
         if self.transpose:
             return np.rot90(label)
         else:
-            return label
+            return label,bboxes
 
     def to_label_as_img(self):
         arr = self.to_label_as_array()
@@ -805,7 +949,7 @@ class CaptionElement(AbstractTextElement):
     text_type = 'caption'
     n_max_lines = 3
     n_min_characters = 50
-    font_size_range = (20, 60)
+    font_size_range = (20, 40)
     line_spacing_range = (1, 8)
 
 
@@ -814,8 +958,8 @@ class ParagraphElement(AbstractTextElement):
     color = PARAGRAPH_COLOR
     text_type = 'paragraph'
     n_max_lines = 1000
-    n_min_characters = 400
-    font_size_range = (20, 60)
+    n_min_characters = 1200
+    font_size_range = (10, 20)
     line_spacing_range = (1, 10)
 
 
@@ -826,7 +970,7 @@ class TitleElement(AbstractTextElement):
     n_max_lines = 20
     n_min_characters = 50
     font_size_range = (50, 150)
-    line_spacing_range = (5, 50)
+    line_spacing_range = (5, 50)    
 
 
 class WordElement(AbstractTextElement):

@@ -45,11 +45,11 @@ class SyntheticDocumentDatasetGenerator:
                 
                 while True:
                     try:
-                        seed = 0#int(time.time())
-                        with use_seed(k):
-                            random_height = choice([True, False], p=[RANDOM_DOC_HEIGHT_FREQ, 1 - RANDOM_DOC_HEIGHT_FREQ])
-                            if random_height:
-                                kwargs['height'] = None
+                        seed = int(time.time())
+                    #     with use_seed(k):
+                        random_height = choice([True, False], p=[RANDOM_DOC_HEIGHT_FREQ, 1 - RANDOM_DOC_HEIGHT_FREQ])
+                        if random_height:
+                            kwargs['height'] = None
                         kwargs['seed'] = seed
 
                         d = SyntheticDocument(**kwargs)

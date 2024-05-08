@@ -13,6 +13,8 @@ from utils.image import draw_line, paste_with_blured_borders, resize
 from synthetic.element import (BackgroundElement, ContextBackgroundElement, DrawingElement, GlyphElement, ImageElement,
                                TitleElement, ParagraphElement, CaptionElement, WordElement, TableElement,
                                get_random_noise_pattern)
+import json
+
 
 
 DEFAULT_DOCUMENT_WIDTH = 1192
@@ -21,15 +23,15 @@ DOCUMENT_HEIGHT_RANGE = (1192, 2176)
 
 LAYOUT_RANGE = {
     'nb_h': (1, 2),
-    'nb_v': (0, 4),
-    'nb_v_lines': (0, 2),
-    'nb_h_lines': (0, 2),
-    'nb_noise_patterns': (0, 5),
-    'nb_words': (0, 10),
-    'margin_h': (5, 40),
-    'margin_v': (5, 40),
-    'padding_h': (5, 80),
-    'padding_v': (5, 80),
+    'nb_v': (4, 8),
+    'nb_v_lines': (1,8),
+    'nb_h_lines': (5, 10),
+    'nb_noise_patterns': (5, 10),
+    'nb_words': (5, 10),
+    'margin_h': (40, 60),
+    'margin_v': (20, 40),
+    'padding_h': (0, 2),
+    'padding_v': (2, 10),
     'caption_padding_v': (0, 20),
     'context_margin_h': (0, 300),
     'context_margin_v': (0, 200),
@@ -42,24 +44,25 @@ LINE_STD_GAUSSIAN_NOISE_RANGE = (4, 40)
 LINE_WIDTH_RANGE = (1, 4)
 
 BLACK_AND_WHITE_FREQ = 0.5
-COMMON_FONT_FREQ = 0.5
+COMMON_FONT_FREQ = 0.8
 CONTEXT_BACKGROUND_FREQ = 0.3
 DOUBLE_PAGE_FREQ = 0.3
-DOUBLE_COLUMN_FREQ = 0.3
+DOUBLE_COLUMN_FREQ = 0.6
 
 ELEMENT_FREQ = {
-    DrawingElement: 0.1,
-    GlyphElement: 0.1,
-    ImageElement: 0.3,
-    ParagraphElement: 0.3,
-    TableElement: 0.05,
+    DrawingElement: 0,
+    GlyphElement: 0,
+    ImageElement: 0.15,
+    ParagraphElement: 0.8,
+    TableElement: 0.0,
     TitleElement: 0.15,
 }
 
 
-class SyntheticDocument:
-    available_elements = [DrawingElement, GlyphElement, ImageElement, ParagraphElement, TableElement, TitleElement]
 
+class SyntheticDocument:
+    available_elements = [DrawingElement, ImageElement,GlyphElement, ParagraphElement, TableElement, TitleElement]
+    available_elements_labels = [ParagraphElement, TitleElement,WordElement]
     @use_seed()
     def __init__(self, width=DEFAULT_DOCUMENT_WIDTH, height=DEFAULT_DOCUMENT_HEIGHT, img_size=None,
                  text_border_label=True, baseline_as_label=False, merged_labels=True):
@@ -90,6 +93,7 @@ class SyntheticDocument:
         self.black_and_white = choice([True, False], p=[BLACK_AND_WHITE_FREQ, 1 - BLACK_AND_WHITE_FREQ])
         self.add_context_background = choice([True, False], p=[CONTEXT_BACKGROUND_FREQ, 1 - CONTEXT_BACKGROUND_FREQ])
         self.backgrounds = []
+
         if self.add_context_background:
             margins = {
                 'left': randint(*LAYOUT_RANGE['context_margin_h']),
@@ -121,8 +125,8 @@ class SyntheticDocument:
                     'border_width': 0,
                 })
 
-        self.lines = self._generate_random_lines()
-        self.noise_patterns = self._generate_random_noise_patterns()
+        #self.lines = self._generate_random_lines()
+        #self.noise_patterns = self._generate_random_noise_patterns()
         self.elements, self.positions = self._generate_random_layout()
         self.neg_elements, self.neg_positions = self._generate_random_layout(as_negative=True)
 
@@ -136,16 +140,16 @@ class SyntheticDocument:
         for background in self.backgrounds:
             bg_width, bg_height = background['element'].size
             bg_x, bg_y = background['position']
-            for _ in range(randint(*LAYOUT_RANGE['nb_v_lines'])):
-                params = {
-                    'position': list(zip(*(np.sort(np_randint(bg_x, bg_x + bg_width + 1, 2)),
-                                           [randint(bg_y, bg_y + bg_height)] * 2))),
-                    'color': tuple([randint(0, 50)] * 3) + (randint(*LINE_OPACITY_RANGE),),
-                    'width': randint(*LINE_WIDTH_RANGE),
-                    'blur_radius': uniform(*LINE_WIDTH_RANGE),
-                    'std_gaussian_noise': tuple([randint(*LINE_STD_GAUSSIAN_NOISE_RANGE) for _ in range(3)]),
-                }
-                lines.append(params)
+            # for _ in range(randint(*LAYOUT_RANGE['nb_v_lines'])):
+            #     params = {
+            #         'position': list(zip(*(np.sort(np_randint(bg_x, bg_x + bg_width + 1, 2)),
+            #                                [randint(bg_y, bg_y + bg_height)] * 2))),
+            #         'color': tuple([randint(0, 50)] * 3) + (randint(*LINE_OPACITY_RANGE),),
+            #         'width': randint(*LINE_WIDTH_RANGE),
+            #         'blur_radius': uniform(*LINE_WIDTH_RANGE),
+            #         'std_gaussian_noise': tuple([randint(*LINE_STD_GAUSSIAN_NOISE_RANGE) for _ in range(3)]),
+            #     }
+            #     lines.append(params)
 
             for _ in range(randint(*LAYOUT_RANGE['nb_h_lines'])):
                 params = {
@@ -176,12 +180,12 @@ class SyntheticDocument:
 
     @use_seed()
     def _generate_random_layout(self, as_negative=False):
-        common_font = choice([True, False], p=[COMMON_FONT_FREQ, 1 - COMMON_FONT_FREQ])
-        if common_font:
-            font_path = ParagraphElement.get_random_font()
-        else:
-            font_path = None
-        element_kwargs = {'as_negative': as_negative, 'font_path': font_path, 'with_border_label': not as_negative and
+        # common_font = choice([True, False], p=[COMMON_FONT_FREQ, 1 - COMMON_FONT_FREQ])
+        # if common_font:
+        #     font_path = ParagraphElement.get_random_font()
+        # else:
+        font_path = None
+        element_kwargs = {'as_negative': as_negative,'with_border_label': not as_negative and
                           self.text_border_label, 'baseline_as_label': self.baseline_as_label}
 
         elements, positions = [], []
@@ -189,7 +193,7 @@ class SyntheticDocument:
             is_light_bg = self.context_background['element'].intensity > 100
             margins = self.context_background['margins']
             caption_padding = randint(*LAYOUT_RANGE['caption_padding_v'])
-            horizontal = choice([True, False])
+            horizontal = choice([True])
             element = None
             if horizontal:
                 text_height = min(margins['bottom'] - caption_padding, (CaptionElement.font_size_range[1] * 3) // 2)
@@ -222,22 +226,33 @@ class SyntheticDocument:
                 bg_x += background['element'].inherent_left_margin
 
             nb_v_elements = randint(*LAYOUT_RANGE['nb_v'])
+            
             if nb_v_elements > 0:
                 margin_v = randint(*LAYOUT_RANGE['margin_v'])
                 padding_v = randint(*LAYOUT_RANGE['padding_v'])
                 height = (bg_height - 2 * margin_v - (nb_v_elements - 1) * padding_v) // nb_v_elements
                 cur_y = bg_y + margin_v
-
-                for _ in range(nb_v_elements):
+                
+                for kk in range(nb_v_elements):
                     nb_h_elements = choice(LAYOUT_RANGE['nb_h'], p=[1-DOUBLE_COLUMN_FREQ, DOUBLE_COLUMN_FREQ])
                     margin_h = randint(*LAYOUT_RANGE['margin_h'])
                     padding_h = randint(*LAYOUT_RANGE['padding_h'])
                     width = (bg_width - 2 * margin_h - (nb_h_elements - 1) * padding_h) // nb_h_elements
                     layout_x_pos = [bg_x]
+                    font_path,font_type = ParagraphElement.get_random_font()        
                     for k in range(nb_h_elements):
-                        element = choice(self.available_elements, p=weights)(width, height, **element_kwargs)
+                        parameters_element = None
+                        if k >0:
+                            if isinstance(element, ParagraphElement):
+                                parameters_element = element.get_parameters()
+
+                        
+                        element = choice(self.available_elements, p=weights)(width, height,font_path = font_path,font_type = font_type,parameters_element = parameters_element,  **element_kwargs)
+  
                         while nb_h_elements == 2 and isinstance(element, TitleElement):
-                            element = choice(self.available_elements, p=weights)(width, height, **element_kwargs)
+
+                            element = choice(self.available_elements, p=weights)(width, height, font_path = font_path,font_type = font_type,parameters_element = parameters_element,**element_kwargs)
+
                         position = (bg_x + margin_h + k * padding_h + k * width, cur_y)
                         elements.append(element)
                         positions.append(position)
@@ -259,20 +274,20 @@ class SyntheticDocument:
                                 text_height = min(width - (content_width + caption_padding),
                                                   (CaptionElement.font_size_range[1] * 3) // 2)
                                 max_font_size = (text_height * 2) // 3
-                                if max_font_size >= CaptionElement.font_size_range[0]:
-                                    element = CaptionElement(height, text_height, transpose=True, **element_kwargs)
-                                    position = (position[0] + content_width + caption_padding, cur_y)
-                                    absolute_element_x = position[0] + element.position[1]
-                                    layout_x_pos += [absolute_element_x, absolute_element_x + element.content_height]
+
                             if isinstance(element, CaptionElement) and len(element.text) > 0:
                                 elements.append(element)
                                 positions.append(position)
 
                     if not as_negative and nb_words > 0:
+                        
                         layout_x_pos.append(bg_width)
+      
                         h_spaces = np.diff(layout_x_pos)[::2]
                         for k, h_space in enumerate(h_spaces):
+                            
                             word_element = WordElement(h_space, height, **element_kwargs)
+
                             if word_element.content_width < h_space:
                                 elements.append(word_element)
                                 positions.append((layout_x_pos[k*2], cur_y))
@@ -300,8 +315,8 @@ class SyntheticDocument:
         self.draw_elements(canvas, canvas_color=mean_background_color)
 
         # Noise
-        [draw_line(canvas, **kwargs) for kwargs in self.lines]
-        self.draw_noise_patterns(canvas)
+        # [draw_line(canvas, **kwargs) for kwargs in self.lines]
+        # self.draw_noise_patterns(canvas)
 
         if self.blur_radius > 0:
             canvas = canvas.filter(ImageFilter.GaussianBlur(radius=self.blur_radius))
@@ -351,19 +366,55 @@ class SyntheticDocument:
             x, y = background['position'][::-1]
             label[x:x+background['element'].height, y:y+background['element'].width] = arr
 
-        for element, position in zip(self.elements, self.positions):
+
+        labels_with_bboxes = {}
+        bboxes = []
+        labels = []
+        for element, position in zip(self.elements, self.positions): ## TO CHANGE FOR BBOXES
             if element.label in restricted_labels:
                 arr = element.to_label_as_array()
+                if len(arr) ==2:
+                    arr,bboxe = arr
+
                 x, y = position[::-1]
+                #check if instance of element in objects
+                c = 0
+                for e in self.available_elements_labels:
+                    if c in [5,6] :
+                        c = 3
+                    if isinstance(element, e):
+                        for bb in bboxe:
+
+                            x_0, y_0, x_1, y_1, x_2, y_2, x_3, y_3 = bb
+                            x_0 += y
+                            x_1 += y
+                            x_2 += y
+                            x_3 += y
+                            y_0 += x
+                            y_1 += x
+                            y_2 += x
+                            y_3 += x
+
+                            bb = [int(x_0), int(y_0), int(x_1), int(y_1), int(x_2), int(y_2), int(x_3), int(y_3)]
+                            
+                            #bb = [int(x_min), int(y_min), int(x_max), int(y_max)]
+                            labels.append(c)
+                            bboxes.append(bb)
+                  #  c+=1
+
                 if hasattr(element, 'transpose') and element.transpose:
                     label[x:x+element.width, y:y+element.height] = arr
+                
                 else:
                     label[x:x+element.height, y:y+element.width] = arr
-
-        return label
+                    
+        labels_with_bboxes = {'bboxes':bboxes, 'labels':labels}
+        return label, labels_with_bboxes
 
     def to_label_as_img(self):
-        arr = self.to_label_as_array()
+
+        arr, labels_with_bboxes = self.to_label_as_array()
+
         res = np.zeros(arr.shape + (3,), dtype=np.uint8)
         for label, color in LABEL_TO_COLOR_MAPPING.items():
             if self.merged_labels:
@@ -375,7 +426,7 @@ class SyntheticDocument:
                     res[arr == label] = color
             else:
                 res[arr == label] = color
-        return Image.fromarray(res)
+        return Image.fromarray(res),labels_with_bboxes
 
     def save(self, name, output_dir):
         output_dir = coerce_to_path_and_check_exist(output_dir)
@@ -387,5 +438,10 @@ class SyntheticDocument:
         img.save(output_dir / name)
 
     def _save_label(self, name, output_dir):
-        img = self.to_label_as_img()
+        img,labels_with_bboxes = self.to_label_as_img()
         img.save(output_dir / name)
+
+        ## save labels_with_bboxes in json file
+        with open(output_dir / name.replace('png', 'json'), 'w') as f:
+            json.dump(labels_with_bboxes, f)
+      
