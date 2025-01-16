@@ -959,8 +959,8 @@ class ParagraphElement(AbstractTextElement):
     text_type = 'paragraph'
     n_max_lines = 1000
     n_min_characters = 1200
-    font_size_range = (10, 20)
-    line_spacing_range = (1, 10)
+    font_size_range = (25, 60)
+    line_spacing_range = (10, 30)
 
 
 class TitleElement(AbstractTextElement):

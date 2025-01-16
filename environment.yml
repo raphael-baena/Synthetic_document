@@ -87,7 +87,6 @@ dependencies:
   - sqlite=3.31.1
   - tk=8.6.8
   - toolz=0.10.0
-  - torchvision=0.2.2
   - tornado=6.0.4
   - unidecode=1.0.23
   - wheel=0.34.2

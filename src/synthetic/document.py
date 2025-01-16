@@ -17,24 +17,24 @@ import json
 
 
 
-DEFAULT_DOCUMENT_WIDTH = 1192
-DEFAULT_DOCUMENT_HEIGHT = 1684
-DOCUMENT_HEIGHT_RANGE = (1192, 2176)
+DEFAULT_DOCUMENT_WIDTH = 1192-300
+DEFAULT_DOCUMENT_HEIGHT = 1684//4
+DOCUMENT_HEIGHT_RANGE = (1192//4, 2176//4)
 
 LAYOUT_RANGE = {
-    'nb_h': (1, 2),
-    'nb_v': (4, 8),
-    'nb_v_lines': (1,8),
-    'nb_h_lines': (5, 10),
+    'nb_h': (1, 1),
+    'nb_v': (1, 3),
+    'nb_v_lines': (4,8),    
+    'nb_h_lines': (3, 6),
     'nb_noise_patterns': (5, 10),
-    'nb_words': (5, 10),
-    'margin_h': (40, 60),
-    'margin_v': (20, 40),
+    'nb_words': (0, 0),
+    'margin_h': (5, 10),
+    'margin_v': (5, 10),
     'padding_h': (0, 2),
     'padding_v': (2, 10),
-    'caption_padding_v': (0, 20),
-    'context_margin_h': (0, 300),
-    'context_margin_v': (0, 200),
+    'caption_padding_v': (0, 10),
+    'context_margin_h': (0, 1),
+    'context_margin_v': (0, 10),
 }
 
 BACKGROUND_BLURED_BORDER_WIDTH_RANGE = (1, 10)
@@ -46,16 +46,16 @@ LINE_WIDTH_RANGE = (1, 4)
 BLACK_AND_WHITE_FREQ = 0.5
 COMMON_FONT_FREQ = 0.8
 CONTEXT_BACKGROUND_FREQ = 0.3
-DOUBLE_PAGE_FREQ = 0.3
-DOUBLE_COLUMN_FREQ = 0.6
+DOUBLE_PAGE_FREQ = 0
+DOUBLE_COLUMN_FREQ = 0.1
 
 ELEMENT_FREQ = {
     DrawingElement: 0,
     GlyphElement: 0,
-    ImageElement: 0.15,
+    ImageElement: 0,
     ParagraphElement: 0.8,
     TableElement: 0.0,
-    TitleElement: 0.15,
+    TitleElement: 0,
 }
 
 
@@ -239,7 +239,8 @@ class SyntheticDocument:
                     padding_h = randint(*LAYOUT_RANGE['padding_h'])
                     width = (bg_width - 2 * margin_h - (nb_h_elements - 1) * padding_h) // nb_h_elements
                     layout_x_pos = [bg_x]
-                    font_path,font_type = ParagraphElement.get_random_font()        
+                    if kk == 0:
+                        font_path,font_type = ParagraphElement.get_random_font()        
                     for k in range(nb_h_elements):
                         parameters_element = None
                         if k >0:
